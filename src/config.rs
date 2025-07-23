@@ -5,7 +5,6 @@ use serde_derive::Deserialize;
 use tokio::fs;
 
 use crate::{
-    auth::AuthConfig,
     automations::AutomationsConfig,
     devices::{DevicesConfig, controllers::ControllersConfig},
     server_backends::ServersConfig,
@@ -15,7 +14,6 @@ use crate::{
 pub struct Config {
     pub servers: ServersConfig,
     pub devices: DevicesConfig,
-    pub auth: AuthConfig,
     pub controllers: ControllersConfig,
     pub automations: AutomationsConfig,
 }

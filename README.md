@@ -14,12 +14,6 @@ Uses mtls to provide authentication and confidentiality meaning that the client 
 
 The TCP server and clients must serialize messages with JSON, delineating messages with a newline (`\n`). The enums defining messages are defined in [devicectrl-common](https://github.com/MatthewCash/devicectrl-common).
 
-### UDP
-
-Supports a very primitive token-based authentication system with **no encryption**, it should not be used and will eventually be removed or replaced.
-
-The UDP server and clients must serialize messages with JSON, with each datagram containing a single, complete message. The enums defining messages are defined in [devicectrl-common](https://github.com/MatthewCash/devicectrl-common).
-
 ### HTTP
 
 Currently unimplemented

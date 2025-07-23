@@ -5,7 +5,7 @@ use automations::start_automations;
 use config::Config;
 use devices::{Devices, controllers::Controllers, dispatch::query_all_device_states, load_devices};
 use sd_notify::NotifyState;
-use server_backends::{tcp, udp};
+use server_backends::tcp;
 use tokio::task::JoinSet;
 use tracing_subscriber::{EnvFilter, filter::LevelFilter};
 
@@ -60,10 +60,6 @@ async fn main() -> Result<()> {
 
     if let Some(ref tcp_config) = state.config.servers.tcp {
         tasks.spawn(tcp::start_listening(tcp_config.clone(), state.clone()));
-    }
-
-    if let Some(ref udp_config) = state.config.servers.udp {
-        tasks.spawn(udp::start_listening(udp_config.clone(), state.clone()));
     }
 
     tasks.spawn(start_automations(state.clone()));
