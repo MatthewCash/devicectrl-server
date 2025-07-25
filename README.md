@@ -20,7 +20,9 @@ Currently unimplemented
 
 ### WebSocket
 
-Currently unimplemented
+Nearly identical to the TCP server but using websocket semantics, mtls is used to provide authentication and confidentiality.
+
+The websocket server and clients must only send text messages, serialized with JSON. Currently the websocket server also sends and expects to receive the same message enums as the TCP server.
 
 ## Automations
 

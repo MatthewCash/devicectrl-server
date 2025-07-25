@@ -2,14 +2,14 @@ use std::{env, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 use automations::start_automations;
-use config::Config;
 use devices::{Devices, controllers::Controllers, dispatch::query_all_device_states, load_devices};
 use sd_notify::NotifyState;
-use server_backends::tcp;
 use tokio::task::JoinSet;
 use tracing_subscriber::{EnvFilter, filter::LevelFilter};
 
-use crate::hooks::HooksChannel;
+use config::Config;
+use hooks::HooksChannel;
+use server_backends::{tcp, websocket};
 
 mod auth;
 mod automations;
@@ -60,6 +60,13 @@ async fn main() -> Result<()> {
 
     if let Some(ref tcp_config) = state.config.servers.tcp {
         tasks.spawn(tcp::start_listening(tcp_config.clone(), state.clone()));
+    }
+
+    if let Some(ref websocket_config) = state.config.servers.websocket {
+        tasks.spawn(websocket::start_listening(
+            websocket_config.clone(),
+            state.clone(),
+        ));
     }
 
     tasks.spawn(start_automations(state.clone()));
