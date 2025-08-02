@@ -35,7 +35,7 @@ pub async fn start_automation(
                     )
                 {
                     log::debug!(
-                        "updating {} as descendant of {}",
+                        "updating {} as dependent of {}",
                         dependency.dependency_id,
                         dependency.dependent_id
                     );
@@ -53,9 +53,32 @@ pub async fn start_automation(
                     .context("failed to process dependent update request")?;
                 }
             }
-
-            // dependencies must be turned off after their dependent is off
             Hook::DeviceStateUpdate(update) => {
+                if let Some(dependency) = config.iter().find(|d| d.dependent_id == update.device_id)
+                    && matches!(
+                        update.new_state,
+                        DeviceState::Switch(SwitchState { power: true })
+                    )
+                {
+                    log::debug!(
+                        "updating {} as dependent of {}",
+                        dependency.dependency_id,
+                        dependency.dependent_id
+                    );
+
+                    process_update_request(
+                        &UpdateRequest {
+                            device_id: dependency.dependency_id,
+                            change_to: DeviceStateUpdate::Switch(SwitchStateUpdate {
+                                power: Some(true),
+                            }),
+                        },
+                        &app_state,
+                    )
+                    .await
+                    .context("failed to process dependent update request")?;
+                }
+
                 if let Some(dependency) = config.iter().find(|d| d.dependent_id == update.device_id)
                     && matches!(
                         update.new_state,
@@ -63,7 +86,7 @@ pub async fn start_automation(
                     )
                 {
                     log::debug!(
-                        "updating {} as descendant of {}",
+                        "updating {} as dependent of {}",
                         dependency.dependency_id,
                         dependency.dependent_id
                     );
