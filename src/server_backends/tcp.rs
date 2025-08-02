@@ -118,7 +118,7 @@ async fn handle_line(
             .await?;
         }
         _ => {
-            send(&ClientBoundTcpMessage::UnknownCommand).await?;
+            send(&ClientBoundTcpMessage::Unimplemented).await?;
         }
     };
 
