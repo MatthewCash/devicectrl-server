@@ -4,6 +4,7 @@ use futures::{
     SinkExt, TryStreamExt,
     future::{Either, select},
 };
+use hyper::body::Bytes;
 use serde::{Deserialize, de};
 
 use serde_derive::Deserialize;
@@ -66,23 +67,33 @@ async fn handle_tcp_conn(
 
     loop {
         match select(ws_stream.try_next(), pin!(notifications.recv())).await {
-            Either::Left((line, _)) => {
-                let Some(Message::Text(text)) = line? else {
-                    log::warn!("Ignoring non-text websocket message");
-                    return Ok(());
-                };
-                if let Err(err) = handle_line(&text, &mut ws_stream, state)
-                    .await
-                    .context("failed to handle websocket message")
-                {
-                    log::warn!("{:?}", err);
+            Either::Left((message, _)) => {
+                match message? {
+                    None | Some(Message::Close(_)) => {
+                        return Ok(());
+                    }
+                    Some(Message::Ping(_)) => {
+                        ws_stream.send(Message::Pong(Bytes::new())).await?;
+                    }
+                    Some(Message::Text(text)) => {
+                        if let Err(err) = handle_line(&text, &mut ws_stream, state)
+                            .await
+                            .context("failed to handle websocket message")
+                        {
+                            log::warn!("{:?}", err);
 
-                    ws_stream
-                        .send(Message::Text(
-                            serde_json::to_string::<ClientBoundTcpMessage>(&err.into())?.into(),
-                        ))
-                        .await?;
-                }
+                            ws_stream
+                                .send(Message::Text(
+                                    serde_json::to_string::<ClientBoundTcpMessage>(&err.into())?
+                                        .into(),
+                                ))
+                                .await?;
+                        }
+                    }
+                    Some(_) => {
+                        log::warn!("Ignoring non-text websocket message");
+                    }
+                };
             }
             Either::Right((event, _)) => {
                 if let Hook::DeviceStateUpdate(notification) = event? {
@@ -134,7 +145,7 @@ async fn handle_line(
             .await?;
         }
         _ => {
-            send(&ClientBoundTcpMessage::UnknownCommand).await?;
+            send(&ClientBoundTcpMessage::Unimplemented).await?;
         }
     };
 
