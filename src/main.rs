@@ -9,7 +9,7 @@ use tracing_subscriber::{EnvFilter, filter::LevelFilter};
 
 use config::Config;
 use hooks::HooksChannel;
-use server_backends::{tcp, websocket};
+use server_backends::{http, tcp, websocket};
 
 mod auth;
 mod automations;
@@ -60,6 +60,10 @@ async fn main() -> Result<()> {
 
     if let Some(ref tcp_config) = state.config.servers.tcp {
         tasks.spawn(tcp::start_listening(tcp_config.clone(), state.clone()));
+    }
+
+    if let Some(ref http_config) = state.config.servers.http {
+        tasks.spawn(http::start_listening(http_config.clone(), state.clone()));
     }
 
     if let Some(ref websocket_config) = state.config.servers.websocket {
