@@ -128,14 +128,14 @@ async fn handle_line(
 
     match message {
         ServerBoundTcpMessage::UpdateRequest(update_request) => {
-            log::debug!("tcp got update request: {:?}", update_request);
+            log::debug!("websocket got update request: {:?}", update_request);
 
             send(&ClientBoundTcpMessage::RequestReceived).await?;
 
             process_update_request(&update_request, state).await?;
         }
         ServerBoundTcpMessage::StateQuery { device_id } => {
-            log::debug!("tcp got state query for {}", device_id);
+            log::debug!("websocket got state query for {}", device_id);
 
             let devices = state.devices.read().await;
             Controllers::dispatch_query_state(
