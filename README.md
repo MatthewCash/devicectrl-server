@@ -32,7 +32,7 @@ Automations are mini-programs run as tokio tasks that can perform actions based 
 
 Hooks provide a tokio channel for automations to listen for events. An automation can iterate over a hook channel to run custom logic on device state update command dispatches or when a device reports a state update notification.
 
-While the server backends are not automations, they function similarly by using the same hooks and dispatch methods.
+While the server backends are not technically automations, they use the same hooks and dispatch methods.
 
 ## Configuration
 

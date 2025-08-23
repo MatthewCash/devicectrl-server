@@ -82,7 +82,7 @@ async fn handle_request(req: Request<Incoming>, state: Arc<AppState>) -> Result<
 
     Ok(match message {
         ServerBoundHttpMessage::UpdateRequest(update_request) => {
-            log::debug!("http got update request: {:?}", update_request);
+            log::debug!("http got update request: {update_request:?}");
 
             process_update_request(&update_request, &state).await?;
 

@@ -80,7 +80,7 @@ async fn handle_tcp_conn(
                             .await
                             .context("failed to handle websocket message")
                         {
-                            log::warn!("{:?}", err);
+                            log::warn!("{err:?}");
 
                             ws_stream
                                 .send(Message::Text(

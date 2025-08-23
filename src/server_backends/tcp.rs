@@ -66,7 +66,7 @@ async fn handle_conn(
                     .await
                     .context("failed to handle tcp line")
                 {
-                    log::warn!("{:?}", err);
+                    log::warn!("{err:?}");
 
                     stream
                         .send(&serde_json::to_string::<ClientBoundTcpMessage>(

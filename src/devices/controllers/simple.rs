@@ -97,7 +97,7 @@ async fn handle_conn(
                     .await
                     .context("failed to handle simple message")
                 {
-                    log::warn!("{:?}", err);
+                    log::warn!("{err:?}");
 
                     stream
                         .send(serde_json::to_vec::<DeviceBoundSimpleMessage>(&err.into())?.into())
@@ -163,7 +163,7 @@ async fn handle_message(
         }
         ServerBoundSimpleMessage::RequestReceived => {}
         ServerBoundSimpleMessage::Failure(msg) => {
-            log::error!("Device failure: {:?}", msg)
+            log::error!("Device failure: {msg:?}")
         }
         ServerBoundSimpleMessage::UpdateNotification(notification) => {
             if notification.device_id != *device_id {

@@ -46,7 +46,7 @@ pub async fn start_automation(
                 .context("tmr's sunset duration could not be found")?
         };
 
-        log::debug!("waiting {:?} until sunset", wait_time);
+        log::debug!("waiting {wait_time:?} until sunset");
         sleep(wait_time).await;
 
         try_join_all(
