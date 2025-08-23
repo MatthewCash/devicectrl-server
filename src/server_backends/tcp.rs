@@ -4,7 +4,6 @@ use futures::{
     SinkExt, TryStreamExt,
     future::{Either, select},
 };
-use serde::{Deserialize, de};
 use serde_derive::Deserialize;
 use std::{net::SocketAddr, pin::pin, sync::Arc};
 use tokio::{
@@ -24,6 +23,7 @@ use tokio_util::codec::{Framed, LinesCodec};
 
 use crate::{
     AppState,
+    config::deserialize_file_path_bytes,
     devices::{controllers::Controllers, dispatch::process_update_request},
     hooks::Hook,
 };
@@ -31,6 +31,7 @@ use crate::{
 #[derive(Clone, Debug, Deserialize)]
 pub struct TcpServerConfig {
     listen_on: SocketAddr,
+
     #[serde(rename = "cert_path", deserialize_with = "deserialize_file_path_bytes")]
     cert_bytes: Vec<u8>,
     #[serde(rename = "key_path", deserialize_with = "deserialize_file_path_bytes")]
@@ -40,13 +41,6 @@ pub struct TcpServerConfig {
         deserialize_with = "deserialize_file_path_bytes"
     )]
     client_ca_bytes: Vec<u8>,
-}
-
-fn deserialize_file_path_bytes<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    std::fs::read(String::deserialize(deserializer)?).map_err(de::Error::custom)
 }
 
 async fn handle_conn(

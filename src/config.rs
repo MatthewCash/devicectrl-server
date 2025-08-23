@@ -1,6 +1,8 @@
 use std::path::Path;
 
 use anyhow::Result;
+use p256::{ecdsa::SigningKey, pkcs8::DecodePrivateKey};
+use serde::{Deserialize, de};
 use serde_derive::Deserialize;
 use tokio::fs;
 
@@ -20,4 +22,19 @@ pub struct Config {
 
 pub async fn load_config(path: impl AsRef<Path>) -> Result<Config> {
     Ok(serde_json::from_slice(&fs::read(path).await?)?)
+}
+
+pub fn deserialize_signing_key<'de, D>(deserializer: D) -> Result<SigningKey, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let der_bytes = std::fs::read(String::deserialize(deserializer)?).map_err(de::Error::custom)?;
+    SigningKey::from_pkcs8_der(&der_bytes).map_err(de::Error::custom)
+}
+
+pub fn deserialize_file_path_bytes<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    std::fs::read(String::deserialize(deserializer)?).map_err(de::Error::custom)
 }

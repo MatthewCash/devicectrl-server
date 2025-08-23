@@ -27,7 +27,7 @@ use tokio_util::{
 
 use crate::{
     AppState,
-    auth::deserialize_signing_key,
+    config::deserialize_signing_key,
     devices::{Device, Devices, dispatch::process_update_notification},
 };
 

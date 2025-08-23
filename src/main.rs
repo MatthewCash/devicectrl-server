@@ -11,7 +11,6 @@ use config::Config;
 use hooks::HooksChannel;
 use server_backends::{http, tcp, websocket};
 
-mod auth;
 mod automations;
 mod config;
 mod devices;
