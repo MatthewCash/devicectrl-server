@@ -152,7 +152,7 @@ async fn handle_line(
     Ok(())
 }
 
-pub async fn start_listening(
+pub async fn start_server(
     websocket_config: WebsocketServerConfig,
     state: &'static AppState,
 ) -> Result<()> {
