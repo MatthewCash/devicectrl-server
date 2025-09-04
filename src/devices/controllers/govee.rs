@@ -5,7 +5,7 @@ use devicectrl_common::{
 };
 use serde_derive::Deserialize;
 use serde_json::{Value, json};
-use std::{net::Ipv4Addr, sync::Arc, time::Duration};
+use std::{net::Ipv4Addr, time::Duration};
 use tokio::{net::UdpSocket, time::sleep};
 
 use crate::{
@@ -106,7 +106,7 @@ impl GoveeController {
             socket: UdpSocket::bind(("0.0.0.0", GOVEE_LISTEN_PORT)).await?,
         })
     }
-    pub async fn start_listening(&self, devices: Devices, app_state: Arc<AppState>) {
+    pub async fn start_listening(&self, devices: Devices, app_state: &AppState) {
         loop {
             if let Err(err) = async {
                 let mut buf = [0u8; 1500];
@@ -127,7 +127,7 @@ impl GoveeController {
                     device_id: device.id,
                     reachable: true,
                     new_state: state,
-                }, &app_state).context("failed to process govee update notification")?;
+                }, app_state).context("failed to process govee update notification")?;
 
                 Result::<()>::Ok(())
             }

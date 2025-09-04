@@ -5,7 +5,7 @@ use devicectrl_common::{
 };
 use serde_derive::Deserialize;
 use serde_json::{Value, json};
-use std::{net::Ipv4Addr, sync::Arc, time::Duration};
+use std::{net::Ipv4Addr, time::Duration};
 use tokio::{net::UdpSocket, time::timeout};
 
 use crate::{
@@ -111,7 +111,7 @@ impl TplinkController {
             socket: UdpSocket::bind("0.0.0.0:0").await?,
         })
     }
-    pub async fn start_listening(&self, devices: Devices, app_state: Arc<AppState>) {
+    pub async fn start_listening(&self, devices: Devices, app_state: &AppState) {
         loop {
             if let Err(err) = async {
                 let mut buf = vec![0u8; 1500];
@@ -133,7 +133,7 @@ impl TplinkController {
                     device_id: device.id,
                     reachable: true,
                     new_state: state,
-                }, &app_state).context("failed to process tplink update notification")?;
+                }, app_state).context("failed to process tplink update notification")?;
 
                 Result::<()>::Ok(())
             }

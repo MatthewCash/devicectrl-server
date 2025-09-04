@@ -154,7 +154,7 @@ async fn handle_line(
 
 pub async fn start_listening(
     websocket_config: WebsocketServerConfig,
-    state: Arc<AppState>,
+    state: &'static AppState,
 ) -> Result<()> {
     let mut root_store = RootCertStore::empty();
     root_store.add(CertificateDer::from_pem_slice(
@@ -184,10 +184,9 @@ pub async fn start_listening(
         let (mut socket, sender) = listener.accept().await?;
         log::debug!("websocket tcp server received connection from {sender}");
 
-        let state = state.clone();
         let acceptor = acceptor.clone();
         tokio::spawn(async move {
-            if let Err(err) = handle_tcp_conn(&mut socket, &state, acceptor).await {
+            if let Err(err) = handle_tcp_conn(&mut socket, state, acceptor).await {
                 log::warn!(
                     "{:?}",
                     err.context("Failed to handle websocket tcp connection")

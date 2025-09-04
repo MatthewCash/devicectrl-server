@@ -119,7 +119,7 @@ async fn handle_line(
     Ok(())
 }
 
-pub async fn start_listening(tcp_config: TcpServerConfig, state: Arc<AppState>) -> Result<()> {
+pub async fn start_server(tcp_config: TcpServerConfig, state: &'static AppState) -> Result<()> {
     let mut root_store = RootCertStore::empty();
     root_store.add(CertificateDer::from_pem_slice(&tcp_config.client_ca_bytes)?)?;
 
@@ -141,10 +141,9 @@ pub async fn start_listening(tcp_config: TcpServerConfig, state: Arc<AppState>) 
         let (mut socket, sender) = listener.accept().await?;
         log::debug!("tcp server received connection from {sender}");
 
-        let state = state.clone();
         let acceptor = acceptor.clone();
         tokio::spawn(async move {
-            if let Err(err) = handle_conn(&mut socket, &state, acceptor).await {
+            if let Err(err) = handle_conn(&mut socket, state, acceptor).await {
                 log::warn!("{:?}", err.context("Failed to handle tcp connection"))
             }
 

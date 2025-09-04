@@ -3,7 +3,6 @@ use devicectrl_common::device_types::switch::SwitchState;
 use devicectrl_common::{DeviceId, UpdateRequest, device_types::switch::SwitchStateUpdate};
 use devicectrl_common::{DeviceState, DeviceStateUpdate};
 use serde_derive::Deserialize;
-use std::sync::Arc;
 
 use crate::{AppState, devices::dispatch::process_update_request, hooks::Hook};
 
@@ -17,7 +16,7 @@ pub type DependencyAutomationConfig = Vec<DependencyRelationship>;
 
 pub async fn start_automation(
     config: DependencyAutomationConfig,
-    app_state: Arc<AppState>,
+    app_state: &AppState,
 ) -> Result<()> {
     let mut receiver = app_state.hooks.receiver.resubscribe();
 
@@ -47,7 +46,7 @@ pub async fn start_automation(
                                 power: Some(true),
                             }),
                         },
-                        &app_state,
+                        app_state,
                     )
                     .await
                     .context("failed to process dependent update request")?;
@@ -73,7 +72,7 @@ pub async fn start_automation(
                                 power: Some(true),
                             }),
                         },
-                        &app_state,
+                        app_state,
                     )
                     .await
                     .context("failed to process dependent update request")?;
@@ -98,7 +97,7 @@ pub async fn start_automation(
                                 power: Some(false),
                             }),
                         },
-                        &app_state,
+                        app_state,
                     )
                     .await
                     .context("failed to process dependent state update")?;

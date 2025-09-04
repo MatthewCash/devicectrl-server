@@ -42,18 +42,18 @@ async fn main() -> Result<()> {
     .await
     .context("failed to load config")?;
 
-    let state = Arc::new(AppState {
+    let state = Box::leak(Box::new(AppState {
         devices: load_devices(&config).await?,
         controllers: Controllers::new(&config.controllers).await?,
         hooks: Default::default(),
         config,
-    });
+    }));
 
     state
         .controllers
-        .start_listening(state.devices.clone(), state.clone());
+        .start_listening(state.devices.clone(), state);
 
-    tokio::spawn(query_all_device_states(state.clone()));
+    tokio::spawn(query_all_device_states(state));
 
     let mut tasks = JoinSet::new();
 
@@ -72,7 +72,7 @@ async fn main() -> Result<()> {
         ));
     }
 
-    tasks.spawn(start_automations(state.clone()));
+    tasks.spawn(start_automations(state));
 
     let _ = sd_notify::notify(false, &[NotifyState::Ready]);
 

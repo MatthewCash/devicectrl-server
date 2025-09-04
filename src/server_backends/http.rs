@@ -48,7 +48,7 @@ where
 
 async fn handle_conn(
     socket: &mut TcpStream,
-    state: Arc<AppState>,
+    state: &'static AppState,
     acceptor: TlsAcceptor,
 ) -> Result<()> {
     let stream = acceptor.accept(socket).await?;
@@ -56,7 +56,7 @@ async fn handle_conn(
 
     let io = TokioIo::new(stream);
 
-    let service = hyper::service::service_fn(|req| handle_request(req, state.clone()));
+    let service = hyper::service::service_fn(|req| handle_request(req, state));
 
     match protocol.as_deref() {
         Some(b"h2") => {
@@ -76,7 +76,7 @@ async fn handle_conn(
     Ok(())
 }
 
-async fn handle_request(req: Request<Incoming>, state: Arc<AppState>) -> Result<Response<String>> {
+async fn handle_request(req: Request<Incoming>, state: &AppState) -> Result<Response<String>> {
     let bytes = req.into_body().collect().await?.to_bytes();
     let message: ServerBoundHttpMessage = serde_json::from_slice(&bytes)?;
 
@@ -84,7 +84,7 @@ async fn handle_request(req: Request<Incoming>, state: Arc<AppState>) -> Result<
         ServerBoundHttpMessage::UpdateRequest(update_request) => {
             log::debug!("http got update request: {update_request:?}");
 
-            process_update_request(&update_request, &state).await?;
+            process_update_request(&update_request, state).await?;
 
             Response::new(serde_json::to_string(
                 &ClientBoundHttpMessage::RequestReceived,
@@ -98,7 +98,7 @@ async fn handle_request(req: Request<Incoming>, state: Arc<AppState>) -> Result<
     })
 }
 
-pub async fn start_listening(http_config: HttpServerConfig, state: Arc<AppState>) -> Result<()> {
+pub async fn start_server(http_config: HttpServerConfig, state: &'static AppState) -> Result<()> {
     let mut root_store = RootCertStore::empty();
     root_store.add(CertificateDer::from_pem_slice(
         &http_config.client_ca_bytes,
@@ -122,7 +122,6 @@ pub async fn start_listening(http_config: HttpServerConfig, state: Arc<AppState>
         let (mut socket, sender) = listener.accept().await?;
         log::debug!("http tcp server received connection from {sender}");
 
-        let state = state.clone();
         let acceptor = acceptor.clone();
         tokio::spawn(async move {
             if let Err(err) = handle_conn(&mut socket, state, acceptor).await {

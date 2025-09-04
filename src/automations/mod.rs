@@ -1,6 +1,5 @@
 use anyhow::Result;
 use serde_derive::Deserialize;
-use std::sync::Arc;
 use sunset_light_temp::SunsetLightTempAutomationConfig;
 use tokio::task::JoinSet;
 
@@ -21,14 +20,14 @@ macro_rules! spawn_automations {
             if let Some(ref config) = $config.$field {
                 $tasks.spawn($field::start_automation(
                     config.clone(),
-                    $app_state.clone(),
+                    $app_state,
                 ));
             }
         )*
     };
 }
 
-pub async fn start_automations(app_state: Arc<AppState>) -> Result<()> {
+pub async fn start_automations(app_state: &'static AppState) -> Result<()> {
     let config = &app_state.config.automations;
 
     let mut tasks = JoinSet::new();

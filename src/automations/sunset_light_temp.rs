@@ -3,7 +3,6 @@ use chrono::{Days, Local, Utc};
 use devicectrl_common::UpdateRequest;
 use futures::future::try_join_all;
 use serde_derive::Deserialize;
-use std::sync::Arc;
 use sunrise::{Coordinates, DawnType, SolarDay, SolarEvent};
 use tokio::time::sleep;
 
@@ -17,7 +16,7 @@ pub struct SunsetLightTempAutomationConfig {
 
 pub async fn start_automation(
     config: SunsetLightTempAutomationConfig,
-    app_state: Arc<AppState>,
+    app_state: &AppState,
 ) -> Result<()> {
     let coord =
         Coordinates::new(config.coords.0, config.coords.1).context("invalid coordinates")?;
@@ -53,7 +52,7 @@ pub async fn start_automation(
             config
                 .updates
                 .iter()
-                .map(|update| process_update_request(update, &app_state)),
+                .map(|update| process_update_request(update, app_state)),
         )
         .await?;
     }

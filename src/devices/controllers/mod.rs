@@ -60,7 +60,7 @@ macro_rules! make_controllers {
             pub fn start_listening(
                 &self,
                 devices: Devices,
-                app_state: Arc<AppState>,
+                app_state: &'static AppState,
             ) {
                 $(
                     self.$field.as_ref().map(|c| {

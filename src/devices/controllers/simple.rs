@@ -14,7 +14,7 @@ use p256::ecdsa::{
 use p256::{ecdsa::Signature, pkcs8::DecodePublicKey};
 use serde::{Deserialize, de};
 use serde_derive::Deserialize;
-use std::{net::SocketAddr, pin::pin, sync::Arc};
+use std::{net::SocketAddr, pin::pin};
 use tokio::{
     io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
@@ -65,7 +65,7 @@ async fn handle_conn(
     devices: Devices,
     mut request_receiver: broadcast::Receiver<DeviceBoundSimpleMessage>,
     server_private_key: &SigningKey,
-    app_state: Arc<AppState>,
+    app_state: &AppState,
 ) -> Result<()> {
     let mut stream = Framed::new(socket, LengthDelimitedCodec::new());
 
@@ -93,7 +93,7 @@ async fn handle_conn(
                 let Some(buf) = buf? else { return Ok(()) };
                 log::debug!("received message from device");
 
-                if let Err(err) = handle_message(&buf, &device_id, devices.clone(), &app_state)
+                if let Err(err) = handle_message(&buf, &device_id, devices.clone(), app_state)
                     .await
                     .context("failed to handle simple message")
                 {
@@ -196,7 +196,7 @@ impl SimpleController {
             request_receiver: receiver,
         })
     }
-    pub async fn start_listening(&self, devices: Devices, app_state: Arc<AppState>) {
+    pub async fn start_listening(&self, devices: Devices, app_state: &'static AppState) {
         loop {
             let (mut socket, sender) = self.listener.accept().await.unwrap();
             log::debug!("simple controller received connection from {sender}");
@@ -204,7 +204,6 @@ impl SimpleController {
             let devices = devices.clone();
             let request_receiver = self.request_receiver.resubscribe();
             let server_private_key = self.global_config.server_private_key.clone();
-            let app_state = app_state.clone();
             tokio::spawn(async move {
                 if let Err(err) = handle_conn(
                     &mut socket,
