@@ -23,7 +23,7 @@ sunrise = "2.1.0"
 tokio = { version = "1.44.2", features = ["full"] }
 tokio-rustls = "0.26.2"
 tokio-util = { version = "0.7.15", features = ["codec"] }
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 tokio-tungstenite = "0.27.0"
 hyper = { version = "1.6.0", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1.16", features = ["tokio"] }
