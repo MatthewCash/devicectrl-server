@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
-use devicectrl_common::device_types::switch::SwitchState;
-use devicectrl_common::{DeviceId, UpdateRequest, device_types::switch::SwitchStateUpdate};
-use devicectrl_common::{DeviceState, DeviceStateUpdate};
+use devicectrl_common::{
+    DeviceId, DeviceState, DeviceStateUpdate, UpdateRequest,
+    device_types::switch::{SwitchState, SwitchStateUpdate},
+};
 use serde_derive::Deserialize;
 
 use crate::{AppState, devices::dispatch::process_update_request, hooks::Hook};

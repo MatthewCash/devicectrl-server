@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use devicectrl_common::protocol::tcp::{ClientBoundTcpMessage, ServerBoundTcpMessage};
+use devicectrl_common::protocol::socket::{ClientBoundSocketMessage, ServerBoundSocketMessage};
 use futures::{
     SinkExt, TryStreamExt,
     future::{Either, select},
@@ -63,7 +63,7 @@ async fn handle_conn(
                     log::warn!("{err:?}");
 
                     stream
-                        .send(&serde_json::to_string::<ClientBoundTcpMessage>(
+                        .send(&serde_json::to_string::<ClientBoundSocketMessage>(
                             &err.into(),
                         )?)
                         .await?;
@@ -73,7 +73,7 @@ async fn handle_conn(
                 if let Hook::DeviceStateUpdate(notification) = event? {
                     stream
                         .send(&serde_json::to_string(
-                            &ClientBoundTcpMessage::UpdateNotification(notification),
+                            &ClientBoundSocketMessage::UpdateNotification(notification),
                         )?)
                         .await?;
                 }
@@ -87,22 +87,22 @@ async fn handle_line(
     stream: &mut Framed<TlsStream<&mut TcpStream>, LinesCodec>,
     state: &AppState,
 ) -> Result<()> {
-    let message: ServerBoundTcpMessage = serde_json::from_str(line)?;
+    let message: ServerBoundSocketMessage = serde_json::from_str(line)?;
 
-    let mut send = async |msg: &ClientBoundTcpMessage| {
+    let mut send = async |msg: &ClientBoundSocketMessage| {
         Result::<()>::Ok(stream.send(&serde_json::to_string(msg)?).await?)
     };
 
     match message {
-        ServerBoundTcpMessage::UpdateRequest(update_request) => {
-            log::debug!("tcp got update request: {:?}", update_request);
+        ServerBoundSocketMessage::UpdateRequest(update_request) => {
+            log::debug!("tcp got update request: {update_request:?}");
 
-            send(&ClientBoundTcpMessage::RequestReceived).await?;
+            send(&ClientBoundSocketMessage::RequestReceived).await?;
 
             process_update_request(&update_request, state).await?;
         }
-        ServerBoundTcpMessage::StateQuery { device_id } => {
-            log::debug!("tcp got state query for {}", device_id);
+        ServerBoundSocketMessage::StateQuery { device_id } => {
+            log::debug!("tcp got state query for {device_id}");
 
             let devices = state.devices.read().await;
             Controllers::dispatch_query_state(
@@ -112,7 +112,7 @@ async fn handle_line(
             .await?;
         }
         _ => {
-            send(&ClientBoundTcpMessage::Unimplemented).await?;
+            send(&ClientBoundSocketMessage::Unimplemented).await?;
         }
     };
 
