@@ -1,9 +1,11 @@
-use std::path::Path;
-
 use anyhow::Result;
-use p256::{ecdsa::SigningKey, pkcs8::DecodePrivateKey};
+use p256::{
+    ecdsa::{SigningKey, VerifyingKey},
+    pkcs8::{DecodePrivateKey, DecodePublicKey},
+};
 use serde::{Deserialize, de};
 use serde_derive::Deserialize;
+use std::path::Path;
 use tokio::fs;
 
 use crate::{
@@ -30,6 +32,14 @@ where
 {
     let der_bytes = std::fs::read(String::deserialize(deserializer)?).map_err(de::Error::custom)?;
     SigningKey::from_pkcs8_der(&der_bytes).map_err(de::Error::custom)
+}
+
+pub fn deserialize_verifying_key<'de, D>(deserializer: D) -> Result<VerifyingKey, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let der_bytes = std::fs::read(String::deserialize(deserializer)?).map_err(de::Error::custom)?;
+    VerifyingKey::from_public_key_der(&der_bytes).map_err(de::Error::custom)
 }
 
 pub fn deserialize_file_path_bytes<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>

@@ -7,12 +7,11 @@ use futures::{
     SinkExt, TryStreamExt,
     future::{Either, select},
 };
+use p256::ecdsa::Signature;
 use p256::ecdsa::{
     SigningKey, VerifyingKey,
     signature::{SignerMut, Verifier},
 };
-use p256::{ecdsa::Signature, pkcs8::DecodePublicKey};
-use serde::{Deserialize, de};
 use serde_derive::Deserialize;
 use std::{net::SocketAddr, pin::pin};
 use tokio::{
@@ -27,7 +26,7 @@ use tokio_util::{
 
 use crate::{
     AppState,
-    config::deserialize_signing_key,
+    config::{deserialize_signing_key, deserialize_verifying_key},
     devices::{Device, Devices, dispatch::process_update_notification},
 };
 
@@ -50,14 +49,6 @@ pub struct SimpleControllerGlobalConfig {
     )]
     server_private_key: SigningKey,
     listen_on: SocketAddr,
-}
-
-fn deserialize_verifying_key<'de, D>(deserializer: D) -> Result<VerifyingKey, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    let der_bytes = std::fs::read(String::deserialize(deserializer)?).map_err(de::Error::custom)?;
-    VerifyingKey::from_public_key_der(&der_bytes).map_err(de::Error::custom)
 }
 
 async fn handle_conn(
