@@ -14,15 +14,19 @@ Uses mtls to provide authentication and confidentiality meaning that the client 
 
 The TCP server and clients must serialize messages with JSON, delineating messages with a newline (`\n`). The enums defining messages are defined in [devicectrl-common](https://github.com/MatthewCash/devicectrl-common).
 
-### HTTP
-
-Currently unimplemented
-
 ### WebSocket
 
 Nearly identical to the TCP server but using websocket semantics, mtls is used to provide authentication and confidentiality.
 
 The websocket server and clients must only send text messages, serialized with JSON. Currently the websocket server also sends and expects to receive the same message enums as the TCP server.
+
+### HTTP
+
+Messages are sent as POST requests to `/` with the message contents serialized with JSON and placed in the body.
+
+Like the other socket-based servers, Mtls is used to provide authentication and confidentiality.
+
+The enums defining messages are defined in [devicectrl-common](https://github.com/MatthewCash/devicectrl-common).
 
 ## Automations
 
