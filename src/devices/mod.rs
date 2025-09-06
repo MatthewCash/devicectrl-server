@@ -2,7 +2,7 @@ use anyhow::Result;
 use controllers::ControllerConfig;
 use devicectrl_common::DeviceId;
 use devicectrl_common::{DeviceState, DeviceType};
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use serde_derive::Deserialize;
 use tokio::sync::RwLock;
@@ -28,9 +28,9 @@ pub struct Device {
 
 pub type DevicesConfig = HashMap<String, DeviceConfig>;
 
-pub type Devices = Arc<RwLock<HashMap<DeviceId, Device>>>;
+pub type Devices = RwLock<HashMap<DeviceId, Device>>;
 
-pub async fn load_devices(config: &Config) -> Result<Devices> {
+pub async fn load_devices(config: &Config) -> Result<&'static Devices> {
     let devices = config
         .devices
         .iter()
@@ -50,5 +50,5 @@ pub async fn load_devices(config: &Config) -> Result<Devices> {
         })
         .collect();
 
-    Ok(Arc::new(RwLock::new(devices)))
+    Ok(Box::leak(Box::new(RwLock::new(devices))))
 }

@@ -53,7 +53,7 @@ pub struct SimpleControllerGlobalConfig {
 
 async fn handle_conn(
     socket: &mut TcpStream,
-    devices: Devices,
+    devices: &'static Devices,
     mut request_receiver: broadcast::Receiver<DeviceBoundSimpleMessage>,
     server_private_key: &SigningKey,
     app_state: &AppState,
@@ -84,7 +84,7 @@ async fn handle_conn(
                 let Some(buf) = buf? else { return Ok(()) };
                 log::debug!("received message from device");
 
-                if let Err(err) = handle_message(&buf, &device_id, devices.clone(), app_state)
+                if let Err(err) = handle_message(&buf, &device_id, devices, app_state)
                     .await
                     .context("failed to handle simple message")
                 {
@@ -123,7 +123,7 @@ async fn handle_conn(
 async fn handle_message(
     buf: &BytesMut,
     device_id: &DeviceId,
-    devices: Devices,
+    devices: &'static Devices,
     app_state: &AppState,
 ) -> Result<()> {
     let sig: &[u8; SIGNATURE_LEN] = &buf
@@ -187,12 +187,11 @@ impl SimpleController {
             request_receiver: receiver,
         })
     }
-    pub async fn start_listening(&self, devices: Devices, app_state: &'static AppState) {
+    pub async fn start_listening(&self, devices: &'static Devices, app_state: &'static AppState) {
         loop {
             let (mut socket, sender) = self.listener.accept().await.unwrap();
             log::debug!("simple controller received connection from {sender}");
 
-            let devices = devices.clone();
             let request_receiver = self.request_receiver.resubscribe();
             let server_private_key = self.global_config.server_private_key.clone();
             tokio::spawn(async move {

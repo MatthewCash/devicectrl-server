@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use serde_derive::Deserialize;
-use std::sync::Arc;
 
 use crate::Devices;
 use crate::{AppState, devices::Device};
@@ -40,7 +39,7 @@ macro_rules! make_controllers {
         #[allow(non_snake_case)]
         $vis struct $name {
             $(
-                pub $field: Option<Arc<$ctrl_ty>>,
+                pub $field: Option<$ctrl_ty>,
             )*
         }
 
@@ -49,7 +48,7 @@ macro_rules! make_controllers {
                 Ok(Self {
                     $(
                     $field: if let Some(cfg) = &config.$field {
-                        Some(Arc::new($ctrl_ty::new(cfg.clone()).await?))
+                        Some($ctrl_ty::new(cfg.clone()).await?)
                     } else {
                         None
                     },
@@ -58,13 +57,12 @@ macro_rules! make_controllers {
             }
 
             pub fn start_listening(
-                &self,
-                devices: Devices,
+                &'static self,
+                devices: &'static Devices,
                 app_state: &'static AppState,
             ) {
                 $(
                     self.$field.as_ref().map(|c| {
-                        let devices = devices.clone();
                         let controller = c.clone();
                         let app_state = app_state.clone();
                         tokio::spawn(async move {

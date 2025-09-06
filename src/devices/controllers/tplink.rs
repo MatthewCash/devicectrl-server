@@ -111,7 +111,7 @@ impl TplinkController {
             socket: UdpSocket::bind("0.0.0.0:0").await?,
         })
     }
-    pub async fn start_listening(&self, devices: Devices, app_state: &AppState) {
+    pub async fn start_listening(&self, devices: &'static Devices, app_state: &AppState) {
         loop {
             if let Err(err) = async {
                 let mut buf = vec![0u8; 1500];

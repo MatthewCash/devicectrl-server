@@ -18,7 +18,7 @@ mod server_backends;
 
 pub struct AppState {
     pub config: Config,
-    pub devices: Devices,
+    pub devices: &'static Devices,
     pub hooks: HooksChannel,
     pub controllers: Controllers,
 }
@@ -48,9 +48,7 @@ async fn main() -> Result<()> {
         config,
     }));
 
-    state
-        .controllers
-        .start_listening(state.devices.clone(), state);
+    state.controllers.start_listening(state.devices, state);
 
     tokio::spawn(query_all_device_states(state));
 

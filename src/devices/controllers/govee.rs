@@ -106,7 +106,7 @@ impl GoveeController {
             socket: UdpSocket::bind(("0.0.0.0", GOVEE_LISTEN_PORT)).await?,
         })
     }
-    pub async fn start_listening(&self, devices: Devices, app_state: &AppState) {
+    pub async fn start_listening(&self, devices: &'static Devices, app_state: &AppState) {
         loop {
             if let Err(err) = async {
                 let mut buf = [0u8; 1500];
