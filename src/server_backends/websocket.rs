@@ -5,8 +5,6 @@ use futures::{
     future::{Either, select},
 };
 use hyper::body::Bytes;
-use serde::{Deserialize, de};
-
 use serde_derive::Deserialize;
 use std::{net::SocketAddr, pin::pin, sync::Arc};
 use tokio::{
@@ -22,11 +20,11 @@ use tokio_rustls::{
     },
     server::TlsStream,
 };
-use tokio_tungstenite::WebSocketStream;
-use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 
 use crate::{
     AppState,
+    config::deserialize_file_path_bytes,
     devices::{controllers::Controllers, dispatch::process_update_request},
     hooks::Hook,
 };
@@ -43,13 +41,6 @@ pub struct WebsocketServerConfig {
         deserialize_with = "deserialize_file_path_bytes"
     )]
     client_ca_bytes: Vec<u8>,
-}
-
-fn deserialize_file_path_bytes<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    std::fs::read(String::deserialize(deserializer)?).map_err(de::Error::custom)
 }
 
 async fn handle_tcp_conn(

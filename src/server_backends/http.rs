@@ -7,7 +7,6 @@ use hyper::{
     server::conn::{http1, http2},
 };
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use serde::{Deserialize, de};
 use serde_derive::Deserialize;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
@@ -23,7 +22,9 @@ use tokio_rustls::{
     },
 };
 
-use crate::{AppState, devices::dispatch::process_update_request};
+use crate::{
+    AppState, config::deserialize_file_path_bytes, devices::dispatch::process_update_request,
+};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct HttpServerConfig {
@@ -37,13 +38,6 @@ pub struct HttpServerConfig {
         deserialize_with = "deserialize_file_path_bytes"
     )]
     client_ca_bytes: Vec<u8>,
-}
-
-fn deserialize_file_path_bytes<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-where
-    D: de::Deserializer<'de>,
-{
-    std::fs::read(String::deserialize(deserializer)?).map_err(de::Error::custom)
 }
 
 async fn handle_conn(
