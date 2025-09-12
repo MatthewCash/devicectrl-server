@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use devicectrl_common::{
-    DeviceId, DeviceState, DeviceStateUpdate, UpdateRequest,
-    device_types::switch::{SwitchState, SwitchStateUpdate},
+    DeviceId, DeviceState, UpdateRequest,
+    device_types::switch::SwitchState,
+    updates::{AttributeUpdate, PowerUpdate},
 };
 use serde_derive::Deserialize;
 
@@ -30,8 +31,8 @@ pub async fn start_automation(
                 if let Some(dependency) =
                     config.iter().find(|d| d.dependent_id == request.device_id)
                     && matches!(
-                        request.change_to,
-                        DeviceStateUpdate::Switch(SwitchStateUpdate { power: Some(true) })
+                        request.update,
+                        AttributeUpdate::Power(PowerUpdate { power: true })
                     )
                 {
                     log::debug!(
@@ -41,11 +42,9 @@ pub async fn start_automation(
                     );
 
                     process_update_request(
-                        &UpdateRequest {
+                        UpdateRequest {
                             device_id: dependency.dependency_id,
-                            change_to: DeviceStateUpdate::Switch(SwitchStateUpdate {
-                                power: Some(true),
-                            }),
+                            update: AttributeUpdate::Power(PowerUpdate { power: true }),
                         },
                         app_state,
                     )
@@ -67,11 +66,9 @@ pub async fn start_automation(
                     );
 
                     process_update_request(
-                        &UpdateRequest {
+                        UpdateRequest {
                             device_id: dependency.dependency_id,
-                            change_to: DeviceStateUpdate::Switch(SwitchStateUpdate {
-                                power: Some(true),
-                            }),
+                            update: AttributeUpdate::Power(PowerUpdate { power: true }),
                         },
                         app_state,
                     )
@@ -92,11 +89,9 @@ pub async fn start_automation(
                     );
 
                     process_update_request(
-                        &UpdateRequest {
+                        UpdateRequest {
                             device_id: dependency.dependency_id,
-                            change_to: DeviceStateUpdate::Switch(SwitchStateUpdate {
-                                power: Some(false),
-                            }),
+                            update: AttributeUpdate::Power(PowerUpdate { power: false }),
                         },
                         app_state,
                     )
@@ -104,6 +99,7 @@ pub async fn start_automation(
                     .context("failed to process dependent state update")?;
                 }
             }
+            _ => {}
         }
     }
 }

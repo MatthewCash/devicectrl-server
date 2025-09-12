@@ -78,7 +78,7 @@ async fn handle_request(req: Request<Incoming>, state: &AppState) -> Result<Resp
         ServerBoundHttpMessage::UpdateRequest(update_request) => {
             log::debug!("http got update request: {update_request:?}");
 
-            process_update_request(&update_request, state).await?;
+            process_update_request(update_request, state).await?;
 
             Response::new(serde_json::to_string(
                 &ClientBoundHttpMessage::RequestReceived,

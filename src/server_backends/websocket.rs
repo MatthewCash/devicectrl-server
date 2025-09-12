@@ -123,7 +123,7 @@ async fn handle_line(
 
             send(&ClientBoundSocketMessage::RequestReceived).await?;
 
-            process_update_request(&update_request, state).await?;
+            process_update_request(update_request, state).await?;
         }
         ServerBoundSocketMessage::StateQuery { device_id } => {
             log::debug!("websocket got state query for {device_id}");

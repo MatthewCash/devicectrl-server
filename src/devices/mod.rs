@@ -20,8 +20,8 @@ pub struct DeviceConfig {
 
 pub struct Device {
     id: DeviceId,
-    #[allow(dead_code)]
     device_type: DeviceType,
+    #[allow(dead_code)]
     state: DeviceState,
     controller: ControllerConfig,
 }

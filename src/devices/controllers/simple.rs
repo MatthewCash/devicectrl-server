@@ -27,10 +27,9 @@ use tokio_util::{
 use crate::{
     AppState,
     config::{deserialize_signing_key, deserialize_verifying_key},
+    devices::ControllerConfig,
     devices::{Device, Devices, dispatch::process_update_notification},
 };
-
-use super::ControllerConfig;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct SimpleControllerConfig {
@@ -187,13 +186,18 @@ impl SimpleController {
             request_receiver: receiver,
         })
     }
-    pub async fn start_listening(&self, devices: &'static Devices, app_state: &'static AppState) {
+    pub async fn start_listening(
+        &self,
+        devices: &'static Devices,
+        app_state: &'static AppState,
+    ) -> Result<()> {
         loop {
-            let (mut socket, sender) = self.listener.accept().await.unwrap();
+            let (mut socket, sender) = self.listener.accept().await?;
             log::debug!("simple controller received connection from {sender}");
 
             let request_receiver = self.request_receiver.resubscribe();
             let server_private_key = self.global_config.server_private_key.clone();
+
             tokio::spawn(async move {
                 if let Err(err) = handle_conn(
                     &mut socket,
@@ -231,12 +235,12 @@ impl SimpleController {
         &self,
         _config: &SimpleControllerConfig,
         _device: &Device,
-        update: &UpdateRequest,
+        request: &UpdateRequest,
     ) -> Result<()> {
         self.request_sender
             .send(DeviceBoundSimpleMessage::UpdateCommand(UpdateCommand {
-                device_id: update.device_id,
-                change_to: update.change_to.clone(),
+                device_id: request.device_id,
+                update: request.update,
             }))?;
 
         Ok(())

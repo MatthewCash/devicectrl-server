@@ -66,7 +66,9 @@ macro_rules! make_controllers {
                         let controller = c.clone();
                         let app_state = app_state.clone();
                         tokio::spawn(async move {
-                            controller.start_listening(devices, app_state).await;
+                            if let Err(err) = controller.start_listening(devices, app_state).await {
+                                log::error!("{} controller listener failed: {:?}", stringify!($field), err);
+                            }
                         });
                     });
                 )*

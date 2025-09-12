@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use devicectrl_common::{
-    DeviceState, DeviceStateUpdate, DeviceType, UpdateNotification, UpdateRequest,
-    device_types::led_strip::LedStripState,
+    DeviceState, DeviceType, UpdateNotification, UpdateRequest,
+    device_types::dimmable_light::DimmableLightState, updates::AttributeUpdate,
 };
 use serde_derive::Deserialize;
 use serde_json::{Value, json};
@@ -28,41 +28,25 @@ pub struct GoveeControllerGlobalConfig {
 const GOVEE_SEND_PORT: u16 = 4003;
 const GOVEE_LISTEN_PORT: u16 = 4002;
 
-fn build_update_payload(state: &DeviceStateUpdate) -> Result<Option<Value>> {
+fn build_update_payload(state: &AttributeUpdate) -> Result<Value> {
     Ok(match state {
-        DeviceStateUpdate::LedStrip(state) => {
-            if state.power.is_some_and(|p| !p) {
-                Some(json!({
-                    "msg": {
-                        "cmd": "turn",
-                        "data": {
-                            "value": 0,
-                        }
-                    }
-                }))
-            } else if let Some(brightness) = state.brightness {
-                // if brightness is set, we can use that to turn the device on
-                Some(json!({
-                    "msg": {
-                        "cmd": "brightness",
-                        "data": {
-                            "value": brightness,
-                        }
-                    }
-                }))
-            } else if state.power.is_some_and(|p| p) {
-                Some(json!({
-                    "msg": {
-                        "cmd": "turn",
-                        "data": {
-                            "value": 1,
-                        }
-                    }
-                }))
-            } else {
-                None
+        AttributeUpdate::Power(update) => json!({
+            "msg": {
+                "cmd": "turn",
+                "data": {
+                    "value": if update.power { 1 } else { 0 },
+                }
             }
-        }
+        }),
+        // brightness will also turn the device on if it is off
+        AttributeUpdate::Brightness(update) => json!({
+            "msg": {
+                "cmd": "brightness",
+                "data": {
+                    "value": update.brightness,
+                }
+            }
+        }),
         _ => bail!("Unsupported state for govee controller!"),
     })
 }
@@ -79,7 +63,7 @@ fn build_query_payload() -> Value {
 
 fn parse_query_payload(payload: &Value, device_type: &DeviceType) -> Result<DeviceState> {
     Ok(match device_type {
-        DeviceType::LedStrip => DeviceState::LedStrip(LedStripState {
+        DeviceType::DimmableLight => DeviceState::DimmableLight(DimmableLightState {
             power: payload["msg"]["data"]["onOff"]
                 .as_i64()
                 .context("govee device query payload missing onOff")?
@@ -106,7 +90,11 @@ impl GoveeController {
             socket: UdpSocket::bind(("0.0.0.0", GOVEE_LISTEN_PORT)).await?,
         })
     }
-    pub async fn start_listening(&self, devices: &'static Devices, app_state: &AppState) {
+    pub async fn start_listening(
+        &self,
+        devices: &'static Devices,
+        app_state: &AppState,
+    ) -> Result<()> {
         loop {
             if let Err(err) = async {
                 let mut buf = [0u8; 1500];
@@ -154,11 +142,9 @@ impl GoveeController {
         &self,
         config: &GoveeControllerConfig,
         _device: &Device,
-        update: &UpdateRequest,
+        request: &UpdateRequest,
     ) -> Result<()> {
-        let Some(payload) = build_update_payload(&update.change_to)? else {
-            return Ok(());
-        };
+        let payload = build_update_payload(&request.update)?;
 
         self.send_command(config, &payload).await?;
 

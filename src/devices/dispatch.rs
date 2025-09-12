@@ -1,28 +1,24 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use devicectrl_common::{UpdateNotification, UpdateRequest};
 use futures::future::join_all;
 
 use super::controllers::Controllers;
 use crate::{AppState, hooks::Hook};
 
-pub async fn process_update_request(request: &UpdateRequest, app_state: &AppState) -> Result<()> {
+pub async fn process_update_request(request: UpdateRequest, app_state: &AppState) -> Result<()> {
     let devices = app_state.devices.read().await;
 
     let device = devices
         .get(&request.device_id)
         .context("Could not find device id!")?;
 
-    if !device.state.is_kind(request.change_to.kind()) {
-        bail!("Device type does not match request state type!");
-    }
-
     app_state
         .hooks
         .sender
-        .send(Hook::DeviceUpdateDispatch(request.clone()))
+        .send(Hook::DeviceUpdateDispatch(request))
         .context("failed to send update request hook")?;
 
-    Controllers::dispatch_update(app_state, device, request).await
+    Controllers::dispatch_update(app_state, device, &request).await
 }
 
 pub fn process_update_notification(update: UpdateNotification, app_state: &AppState) -> Result<()> {

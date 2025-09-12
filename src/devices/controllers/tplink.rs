@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use devicectrl_common::{
-    DeviceState, DeviceStateUpdate, DeviceType, UpdateNotification, UpdateRequest,
-    device_types::switch::SwitchState,
+    DeviceState, DeviceType, UpdateNotification, UpdateRequest, device_types::switch::SwitchState,
+    updates::AttributeUpdate,
 };
 use serde_derive::Deserialize;
 use serde_json::{Value, json};
@@ -52,16 +52,15 @@ pub struct TplinkControllerGlobalConfig {
     response_timeout: Duration,
 }
 
-fn build_update_payload(state: &DeviceStateUpdate) -> Result<Option<Value>> {
+fn build_update_payload(state: &AttributeUpdate) -> Result<Value> {
     Ok(match state {
-        DeviceStateUpdate::Switch(state) => state.power.map(|power| {
-            json!({
+        AttributeUpdate::Power(update) => json!({
                 "system": {
                     "set_relay_state": {
-                        "state": if power { 1 } else { 0 }
+                        "state": if update.power { 1 } else { 0 }
                     }
                 }
-            })
+
         }),
         _ => bail!("Unsupported state for tplink controller!"),
     })
@@ -111,7 +110,11 @@ impl TplinkController {
             socket: UdpSocket::bind("0.0.0.0:0").await?,
         })
     }
-    pub async fn start_listening(&self, devices: &'static Devices, app_state: &AppState) {
+    pub async fn start_listening(
+        &self,
+        devices: &'static Devices,
+        app_state: &AppState,
+    ) -> Result<()> {
         loop {
             if let Err(err) = async {
                 let mut buf = vec![0u8; 1500];
@@ -178,11 +181,9 @@ impl TplinkController {
         &self,
         config: &TplinkControllerConfig,
         device: &Device,
-        update: &UpdateRequest,
+        request: &UpdateRequest,
     ) -> Result<()> {
-        let Some(payload) = build_update_payload(&update.change_to)? else {
-            return Ok(());
-        };
+        let payload = build_update_payload(&request.update)?;
 
         let socket = UdpSocket::bind("0.0.0.0:0").await?;
 
