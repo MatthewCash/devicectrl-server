@@ -11,6 +11,7 @@ use tokio::fs;
 use crate::{
     automations::AutomationsConfig,
     devices::{DevicesConfig, controllers::ControllersConfig},
+    scenes::ScenesConfig,
     server_backends::ServersConfig,
 };
 
@@ -20,6 +21,7 @@ pub struct Config {
     pub devices: DevicesConfig,
     pub controllers: ControllersConfig,
     pub automations: AutomationsConfig,
+    pub scenes: ScenesConfig,
 }
 
 pub async fn load_config(path: impl AsRef<Path>) -> Result<Config> {

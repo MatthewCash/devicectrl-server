@@ -24,6 +24,7 @@ use tokio_rustls::{
 
 use crate::{
     AppState, config::deserialize_file_path_bytes, devices::dispatch::process_update_request,
+    scenes::process_scene_activate,
 };
 
 #[derive(Clone, Debug, Deserialize)]
@@ -79,6 +80,15 @@ async fn handle_request(req: Request<Incoming>, state: &AppState) -> Result<Resp
             log::debug!("http got update request: {update_request:?}");
 
             process_update_request(update_request, state).await?;
+
+            Response::new(serde_json::to_string(
+                &ClientBoundHttpMessage::RequestReceived,
+            )?)
+        }
+        ServerBoundHttpMessage::ActivateScene(scene_id) => {
+            log::debug!("http got activate scene for {scene_id}");
+
+            process_scene_activate(&scene_id, state).await?;
 
             Response::new(serde_json::to_string(
                 &ClientBoundHttpMessage::RequestReceived,

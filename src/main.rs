@@ -14,6 +14,7 @@ mod automations;
 mod config;
 mod devices;
 mod hooks;
+mod scenes;
 mod server_backends;
 
 pub struct AppState {

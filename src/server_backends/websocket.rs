@@ -27,6 +27,7 @@ use crate::{
     config::deserialize_file_path_bytes,
     devices::{controllers::Controllers, dispatch::process_update_request},
     hooks::Hook,
+    scenes::process_scene_activate,
 };
 
 #[derive(Clone, Debug, Deserialize)]
@@ -134,6 +135,13 @@ async fn handle_line(
                 devices.get(&device_id).context("failed to find device")?,
             )
             .await?;
+        }
+        ServerBoundSocketMessage::ActivateScene(scene_id) => {
+            log::debug!("tcp got activate scene for {scene_id}");
+
+            process_scene_activate(&scene_id, state).await?;
+
+            send(&ClientBoundSocketMessage::RequestReceived).await?;
         }
         _ => {
             send(&ClientBoundSocketMessage::Unimplemented).await?;

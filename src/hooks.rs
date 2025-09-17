@@ -1,10 +1,12 @@
-use devicectrl_common::{UpdateNotification, UpdateRequest};
+use devicectrl_common::{SceneId, UpdateNotification, UpdateRequest};
 use tokio::sync::broadcast;
 
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum Hook {
     DeviceUpdateDispatch(UpdateRequest),
     DeviceStateUpdate(UpdateNotification),
+    SceneActivate(SceneId),
 }
 
 pub struct HooksChannel {
