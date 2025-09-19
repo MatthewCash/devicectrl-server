@@ -2,6 +2,9 @@ use anyhow::{Context, Result};
 use serde_derive::Deserialize;
 
 use crate::Devices;
+use crate::devices::controllers::krypton::{
+    KryptonController, KryptonControllerConfig, KryptonControllerGlobalConfig,
+};
 use crate::{AppState, devices::Device};
 use devicectrl_common::UpdateRequest;
 use govee::{GoveeController, GoveeControllerConfig, GoveeControllerGlobalConfig};
@@ -9,6 +12,7 @@ use simple::{SimpleController, SimpleControllerConfig, SimpleControllerGlobalCon
 use tplink::{TplinkController, TplinkControllerConfig, TplinkControllerGlobalConfig};
 
 pub mod govee;
+pub mod krypton;
 pub mod simple;
 pub mod tplink;
 
@@ -16,6 +20,7 @@ pub mod tplink;
 #[serde(tag = "type")]
 pub enum ControllerConfig {
     Simple(SimpleControllerConfig),
+    Krypton(KryptonControllerConfig),
     Tplink(TplinkControllerConfig),
     Govee(GoveeControllerConfig),
 }
@@ -24,6 +29,7 @@ pub enum ControllerConfig {
 #[allow(non_snake_case)]
 pub struct ControllersConfig {
     Simple: Option<SimpleControllerGlobalConfig>,
+    Krypton: Option<KryptonControllerGlobalConfig>,
     Tplink: Option<TplinkControllerGlobalConfig>,
     Govee: Option<GoveeControllerGlobalConfig>,
 }
@@ -125,6 +131,7 @@ macro_rules! make_controllers {
 make_controllers! {
     pub struct Controllers {
         Simple => SimpleController,
+        Krypton => KryptonController,
         Tplink => TplinkController,
         Govee => GoveeController,
     }
