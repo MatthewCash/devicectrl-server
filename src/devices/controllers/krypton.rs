@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use devicectrl_common::{
     DeviceId, UpdateCommand, UpdateRequest,
-    protocol::krypton::{DeviceBoundKryptonMessage, SIGNATURE_LEN, ServerBoundKryptonMessage},
+    protocol::krypton::{DeviceBoundKryptonMessage, ServerBoundKryptonMessage},
 };
 use futures::{
     SinkExt, TryStreamExt,
@@ -180,8 +180,6 @@ async fn handle_message(
     devices: &Devices,
     app_state: &AppState,
 ) -> Result<()> {
-    let data = &buf.get(SIGNATURE_LEN..).context("message is too short")?;
-
     let devices = devices.read().await;
 
     let ControllerConfig::Krypton(ref _config) = devices
@@ -192,7 +190,7 @@ async fn handle_message(
         bail!("Device is not a krypton device");
     };
 
-    let message: ServerBoundKryptonMessage = serde_json::from_slice(data)?;
+    let message: ServerBoundKryptonMessage = serde_json::from_slice(buf)?;
 
     match message {
         ServerBoundKryptonMessage::Identify(_) => {
