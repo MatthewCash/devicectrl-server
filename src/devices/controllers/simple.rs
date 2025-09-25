@@ -7,15 +7,18 @@ use futures::{
     SinkExt, TryStreamExt,
     future::{Either, select},
 };
-use p256::ecdsa::Signature;
-use p256::ecdsa::{
-    SigningKey, VerifyingKey,
-    signature::{SignerMut, Verifier},
+use p256::{ecdsa::Signature, elliptic_curve::rand_core::OsRng};
+use p256::{
+    ecdsa::{
+        SigningKey, VerifyingKey,
+        signature::{SignerMut, Verifier},
+    },
+    elliptic_curve::rand_core::RngCore,
 };
 use serde_derive::Deserialize;
 use std::{net::SocketAddr, pin::pin};
 use tokio::{
-    io::AsyncWriteExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::broadcast,
 };
@@ -50,6 +53,23 @@ pub struct SimpleControllerGlobalConfig {
     listen_on: SocketAddr,
 }
 
+fn create_signed_message(
+    message: &DeviceBoundSimpleMessage,
+    server_nonce: u32,
+    server_private_key: &SigningKey,
+) -> Result<Vec<u8>> {
+    let message_data = serde_json::to_vec(message)?;
+    let sig: Signature = server_private_key.clone().try_sign(&message_data)?;
+
+    let mut data =
+        Vec::with_capacity(size_of_val(&server_nonce) + message_data.len() + SIGNATURE_LEN);
+    data.extend_from_slice(&server_nonce.to_be_bytes());
+    data.extend_from_slice(&sig.to_bytes());
+    data.extend_from_slice(&message_data);
+
+    Ok(data)
+}
+
 async fn handle_conn(
     socket: &mut TcpStream,
     devices: &'static Devices,
@@ -57,6 +77,16 @@ async fn handle_conn(
     server_private_key: &SigningKey,
     app_state: &AppState,
 ) -> Result<()> {
+    // the client must include an incremented nonce in all messages
+    let mut server_nonce = OsRng.next_u32();
+    socket.write_u32(server_nonce).await?;
+
+    // the client sends its own nonce
+    let mut expected_client_nonce = socket
+        .read_u32()
+        .await
+        .context("Client nonce is not 4 bytes")?;
+
     let mut stream = Framed::new(socket, LengthDelimitedCodec::new());
 
     let Some(buf) = stream.try_next().await? else {
@@ -83,9 +113,11 @@ async fn handle_conn(
                 let Some(buf) = buf? else { return Ok(()) };
                 log::debug!("received message from device");
 
-                if let Err(err) = handle_message(&buf, &device_id, devices, app_state)
-                    .await
-                    .context("failed to handle simple message")
+                expected_client_nonce = expected_client_nonce.wrapping_add(1);
+                if let Err(err) =
+                    handle_message(&buf, &device_id, expected_client_nonce, devices, app_state)
+                        .await
+                        .context("failed to handle simple message")
                 {
                     log::warn!("{err:?}");
 
@@ -107,12 +139,11 @@ async fn handle_conn(
                     continue;
                 }
 
-                let mut data = serde_json::to_vec(&request)?;
-
-                let sig: Signature = server_private_key.clone().try_sign(&data)?;
-                data.splice(0..0, sig.to_bytes());
-
                 log::debug!("sending request to device");
+
+                server_nonce = server_nonce.wrapping_add(1);
+                let data = create_signed_message(&request, server_nonce, server_private_key)?;
+
                 stream.send(data.into()).await?;
             }
         }
@@ -122,14 +153,31 @@ async fn handle_conn(
 async fn handle_message(
     buf: &BytesMut,
     device_id: &DeviceId,
+    expected_client_nonce: u32,
     devices: &'static Devices,
     app_state: &AppState,
 ) -> Result<()> {
+    let client_nonce = u32::from_be_bytes(
+        buf.get(..size_of_val(&expected_client_nonce))
+            .context("message is not long enough for nonce")?
+            .try_into()?,
+    );
+
+    if client_nonce != expected_client_nonce {
+        bail!(
+            "Invalid client nonce. Expected: {}, received: {}",
+            expected_client_nonce,
+            client_nonce
+        );
+    }
+
     let sig: &[u8; SIGNATURE_LEN] = &buf
-        .get(..SIGNATURE_LEN)
+        .get(size_of_val(&client_nonce)..size_of_val(&client_nonce) + SIGNATURE_LEN)
         .context("message is not long enough for signature")?
         .try_into()?;
-    let data = &buf.get(SIGNATURE_LEN..).context("message is too short")?;
+    let data = &buf
+        .get(size_of_val(&client_nonce) + SIGNATURE_LEN..)
+        .context("message is too short")?;
 
     let devices = devices.read().await;
 
