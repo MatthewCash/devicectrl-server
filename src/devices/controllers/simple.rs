@@ -3,10 +3,7 @@ use devicectrl_common::{
     DeviceId, UpdateCommand, UpdateRequest,
     protocol::simple::{DeviceBoundSimpleMessage, SIGNATURE_LEN, ServerBoundSimpleMessage},
 };
-use futures::{
-    SinkExt, TryStreamExt,
-    future::{Either, select},
-};
+use futures::future::{Either, select};
 use p256::{ecdsa::Signature, elliptic_curve::rand_core::OsRng};
 use p256::{
     ecdsa::{
@@ -18,14 +15,11 @@ use p256::{
 use serde_derive::Deserialize;
 use std::{net::SocketAddr, pin::pin};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
-    sync::broadcast,
+    sync::{broadcast, mpsc},
 };
-use tokio_util::{
-    bytes::BytesMut,
-    codec::{Framed, LengthDelimitedCodec},
-};
+use tokio_util::bytes::BytesMut;
 
 use crate::{
     AppState,
@@ -53,19 +47,77 @@ pub struct SimpleControllerGlobalConfig {
     listen_on: SocketAddr,
 }
 
+async fn read_signed_message(
+    mut socket: impl AsyncRead + Unpin,
+    expected_client_nonce: &mut u32,
+    public_key: &VerifyingKey,
+) -> Result<ServerBoundSimpleMessage> {
+    *expected_client_nonce = expected_client_nonce.wrapping_add(1);
+    let client_nonce = socket
+        .read_u32()
+        .await
+        .context("Client nonce is not 4 bytes")?;
+
+    if *expected_client_nonce != client_nonce {
+        bail!(
+            "Client nonce mismatch: expected {}, got {}",
+            expected_client_nonce,
+            client_nonce
+        );
+    }
+
+    let data_len = socket
+        .read_u32()
+        .await
+        .context("Data length is not 4 bytes")? as usize;
+
+    // Prepare buffer for nonce + length + message + signature
+    let nonce_len = size_of_val(&client_nonce);
+    let length_len = size_of_val(&data_len);
+    let total_len = nonce_len + length_len + data_len + SIGNATURE_LEN;
+    let mut buf = vec![0u8; total_len];
+
+    // Copy nonce and length into buffer so that it can be verified by the signature
+    buf[..nonce_len].copy_from_slice(&client_nonce.to_be_bytes());
+    buf[nonce_len..nonce_len + length_len].copy_from_slice(&data_len.to_be_bytes());
+
+    // Read remaining message + signature
+    socket
+        .read_exact(&mut buf[nonce_len + length_len..])
+        .await
+        .context("Failed to read message")?;
+
+    let data_end = nonce_len + length_len + data_len;
+    let data = &buf[..data_end];
+    let sig = &buf[data_end..];
+
+    public_key.verify(data, &Signature::from_slice(sig)?)?;
+
+    Ok(serde_json::from_slice(
+        &buf[nonce_len + length_len..data_end],
+    )?)
+}
+
 fn create_signed_message(
     message: &DeviceBoundSimpleMessage,
-    server_nonce: u32,
+    server_nonce: &mut u32,
     server_private_key: &SigningKey,
 ) -> Result<Vec<u8>> {
     let message_data = serde_json::to_vec(message)?;
-    let sig: Signature = server_private_key.clone().try_sign(&message_data)?;
+    let data_len = message_data.len() as u32;
 
-    let mut data =
-        Vec::with_capacity(size_of_val(&server_nonce) + message_data.len() + SIGNATURE_LEN);
+    let mut data = Vec::with_capacity(
+        size_of_val(server_nonce) + size_of_val(&data_len) + message_data.len() + SIGNATURE_LEN,
+    );
+
+    *server_nonce = server_nonce.wrapping_add(1);
     data.extend_from_slice(&server_nonce.to_be_bytes());
-    data.extend_from_slice(&sig.to_bytes());
+    data.extend_from_slice(&data_len.to_be_bytes());
     data.extend_from_slice(&message_data);
+
+    let sig: Signature = server_private_key.clone().try_sign(&data)?;
+
+    data.extend_from_slice(&sig.to_bytes());
 
     Ok(data)
 }
@@ -87,114 +139,123 @@ async fn handle_conn(
         .await
         .context("Client nonce is not 4 bytes")?;
 
-    let mut stream = Framed::new(socket, LengthDelimitedCodec::new());
+    let identify_message_len = socket
+        .read_u32()
+        .await
+        .context("Identify message length is not 4 bytes")? as usize;
 
-    let Some(buf) = stream.try_next().await? else {
-        return Ok(());
-    };
-
-    let message: ServerBoundSimpleMessage = serde_json::from_slice(&buf)?;
+    let mut identify_buf = BytesMut::with_capacity(identify_message_len);
+    socket
+        .read_exact(&mut identify_buf)
+        .await
+        .context("Failed to read identify message")?;
+    let message: ServerBoundSimpleMessage = serde_json::from_slice(&identify_buf)?;
 
     let ServerBoundSimpleMessage::Identify(device_id) = message else {
         bail!("Device did not identify itself!");
     };
-    if !devices.read().await.contains_key(&device_id) {
-        bail!("Device attempted to identify with unknown id");
-    }
+
+    // Now that we know the device ID, we can get its public key
+    let public_key = {
+        let devices = devices.read().await;
+        let ControllerConfig::Simple(ref config) = devices
+            .get(&device_id)
+            .context("Message received from unknown device")?
+            .controller
+        else {
+            bail!("Device is not a simple device");
+        };
+
+        config.public_key
+    };
 
     log::info!(
         "Simple device [{device_id}] connected from {:?}",
-        stream.get_ref().peer_addr()
+        socket.peer_addr()
     );
 
-    loop {
-        match select(stream.try_next(), pin!(request_receiver.recv())).await {
-            Either::Left((buf, _)) => {
-                let Some(buf) = buf? else { return Ok(()) };
-                log::debug!("received message from device");
+    let (mut read, mut write) = socket.split();
 
-                expected_client_nonce = expected_client_nonce.wrapping_add(1);
-                if let Err(err) =
-                    handle_message(&buf, &device_id, expected_client_nonce, devices, app_state)
+    let (sender, mut receiver) = mpsc::channel::<ServerBoundSimpleMessage>(16);
+
+    moro::async_scope!(|scope| {
+        // read calls are done concurrently so that they are not cancelled by select()
+        scope.spawn(async {
+            loop {
+                match read_signed_message(&mut read, &mut expected_client_nonce, &public_key).await
+                {
+                    Ok(message) => {
+                        if let Err(err) = sender.send(message).await {
+                            log::warn!("Failed to send message to handler: {err:?}");
+                            break;
+                        }
+                    }
+                    Err(err) => {
+                        log::warn!("Failed to read signed message: {err:?}");
+                        break;
+                    }
+                }
+            }
+        });
+
+        loop {
+            match select(pin!(receiver.recv()), pin!(request_receiver.recv())).await {
+                Either::Left((message, _)) => {
+                    let Some(message) = message else {
+                        return Ok(());
+                    };
+                    log::debug!("received message from device");
+
+                    if let Err(err) = handle_message(&message, &device_id, app_state)
                         .await
                         .context("failed to handle simple message")
-                {
-                    log::warn!("{err:?}");
+                    {
+                        log::warn!("{err:?}");
 
-                    stream
-                        .send(serde_json::to_vec::<DeviceBoundSimpleMessage>(&err.into())?.into())
+                        write
+                            .write_all(&create_signed_message(
+                                &err.into(),
+                                &mut server_nonce,
+                                server_private_key,
+                            )?)
+                            .await?;
+                    }
+                }
+                Either::Right((request, _)) => {
+                    let request = request.context("failed to recv simple message")?;
+
+                    if Some(device_id)
+                        != match &request {
+                            DeviceBoundSimpleMessage::UpdateCommand(command) => {
+                                Some(command.device_id)
+                            }
+                            DeviceBoundSimpleMessage::StateQuery { device_id } => Some(*device_id),
+                            _ => None,
+                        }
+                    {
+                        continue;
+                    }
+
+                    log::debug!("sending request to device");
+                    write
+                        .write_all(&create_signed_message(
+                            &request,
+                            &mut server_nonce,
+                            server_private_key,
+                        )?)
                         .await?;
                 }
             }
-            Either::Right((request, _)) => {
-                let request = request.context("failed to recv simple message")?;
-
-                if Some(device_id)
-                    != match &request {
-                        DeviceBoundSimpleMessage::UpdateCommand(command) => Some(command.device_id),
-                        DeviceBoundSimpleMessage::StateQuery { device_id } => Some(*device_id),
-                        _ => None,
-                    }
-                {
-                    continue;
-                }
-
-                log::debug!("sending request to device");
-
-                server_nonce = server_nonce.wrapping_add(1);
-                let data = create_signed_message(&request, server_nonce, server_private_key)?;
-
-                stream.send(data.into()).await?;
-            }
         }
-    }
+    })
+    .await
 }
 
 async fn handle_message(
-    buf: &BytesMut,
+    message: &ServerBoundSimpleMessage,
     device_id: &DeviceId,
-    expected_client_nonce: u32,
-    devices: &'static Devices,
     app_state: &AppState,
 ) -> Result<()> {
-    let client_nonce = u32::from_be_bytes(
-        buf.get(..size_of_val(&expected_client_nonce))
-            .context("message is not long enough for nonce")?
-            .try_into()?,
-    );
-
-    if client_nonce != expected_client_nonce {
-        bail!(
-            "Invalid client nonce. Expected: {}, received: {}",
-            expected_client_nonce,
-            client_nonce
-        );
-    }
-
-    let sig: &[u8; SIGNATURE_LEN] = &buf
-        .get(size_of_val(&client_nonce)..size_of_val(&client_nonce) + SIGNATURE_LEN)
-        .context("message is not long enough for signature")?
-        .try_into()?;
-    let data = &buf
-        .get(size_of_val(&client_nonce) + SIGNATURE_LEN..)
-        .context("message is too short")?;
-
-    let devices = devices.read().await;
-
-    let ControllerConfig::Simple(ref config) = devices
-        .get(device_id)
-        .context("Message received from unknown device")?
-        .controller
-    else {
-        bail!("Device is not a simple device");
-    };
-
-    config
-        .public_key
-        .verify(data, &Signature::from_slice(sig)?)?;
-
-    let message: ServerBoundSimpleMessage = serde_json::from_slice(data)?;
-
     match message {
         ServerBoundSimpleMessage::Identify(_) => {
             bail!("Device sent another identify")
@@ -208,7 +269,7 @@ async fn handle_message(
                 bail!("Device sent update with incorrect device id");
             }
 
-            process_update_notification(notification, app_state)
+            process_update_notification(*notification, app_state)
                 .context("failed to process simple update notification")?;
         }
         _ => log::warn!("Device sent unknown message"),
@@ -241,6 +302,7 @@ impl SimpleController {
     ) -> Result<()> {
         loop {
             let (mut socket, sender) = self.listener.accept().await?;
+
             log::debug!("simple controller received connection from {sender}");
 
             let request_receiver = self.request_receiver.resubscribe();
