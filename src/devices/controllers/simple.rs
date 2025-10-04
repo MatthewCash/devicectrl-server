@@ -19,7 +19,6 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::{broadcast, mpsc},
 };
-use tokio_util::bytes::BytesMut;
 
 use crate::{
     AppState,
@@ -49,36 +48,36 @@ pub struct SimpleControllerGlobalConfig {
 
 async fn read_signed_message(
     mut socket: impl AsyncRead + Unpin,
-    expected_client_nonce: &mut u32,
+    expected_recv_nonce: &mut u32,
     public_key: &VerifyingKey,
 ) -> Result<ServerBoundSimpleMessage> {
-    *expected_client_nonce = expected_client_nonce.wrapping_add(1);
-    let client_nonce = socket
+    *expected_recv_nonce = expected_recv_nonce.wrapping_add(1);
+    let recv_nonce = socket
         .read_u32()
         .await
         .context("Client nonce is not 4 bytes")?;
 
-    if *expected_client_nonce != client_nonce {
+    if *expected_recv_nonce != recv_nonce {
         bail!(
             "Client nonce mismatch: expected {}, got {}",
-            expected_client_nonce,
-            client_nonce
+            expected_recv_nonce,
+            recv_nonce
         );
     }
 
     let data_len = socket
         .read_u32()
         .await
-        .context("Data length is not 4 bytes")? as usize;
+        .context("Data length is not 4 bytes")?;
 
     // Prepare buffer for nonce + length + message + signature
-    let nonce_len = size_of_val(&client_nonce);
+    let nonce_len = size_of_val(&recv_nonce);
     let length_len = size_of_val(&data_len);
-    let total_len = nonce_len + length_len + data_len + SIGNATURE_LEN;
+    let total_len = nonce_len + length_len + data_len as usize + SIGNATURE_LEN;
     let mut buf = vec![0u8; total_len];
 
     // Copy nonce and length into buffer so that it can be verified by the signature
-    buf[..nonce_len].copy_from_slice(&client_nonce.to_be_bytes());
+    buf[..nonce_len].copy_from_slice(&recv_nonce.to_be_bytes());
     buf[nonce_len..nonce_len + length_len].copy_from_slice(&data_len.to_be_bytes());
 
     // Read remaining message + signature
@@ -87,7 +86,7 @@ async fn read_signed_message(
         .await
         .context("Failed to read message")?;
 
-    let data_end = nonce_len + length_len + data_len;
+    let data_end = nonce_len + length_len + data_len as usize;
     let data = &buf[..data_end];
     let sig = &buf[data_end..];
 
@@ -100,18 +99,18 @@ async fn read_signed_message(
 
 fn create_signed_message(
     message: &DeviceBoundSimpleMessage,
-    server_nonce: &mut u32,
+    send_nonce: &mut u32,
     server_private_key: &SigningKey,
 ) -> Result<Vec<u8>> {
     let message_data = serde_json::to_vec(message)?;
     let data_len = message_data.len() as u32;
 
     let mut data = Vec::with_capacity(
-        size_of_val(server_nonce) + size_of_val(&data_len) + message_data.len() + SIGNATURE_LEN,
+        size_of_val(send_nonce) + size_of_val(&data_len) + message_data.len() + SIGNATURE_LEN,
     );
 
-    *server_nonce = server_nonce.wrapping_add(1);
-    data.extend_from_slice(&server_nonce.to_be_bytes());
+    *send_nonce = send_nonce.wrapping_add(1);
+    data.extend_from_slice(&send_nonce.to_be_bytes());
     data.extend_from_slice(&data_len.to_be_bytes());
     data.extend_from_slice(&message_data);
 
@@ -130,11 +129,11 @@ async fn handle_conn(
     app_state: &AppState,
 ) -> Result<()> {
     // the client must include an incremented nonce in all messages
-    let mut server_nonce = OsRng.next_u32();
-    socket.write_u32(server_nonce).await?;
+    let mut expected_recv_nonce = OsRng.next_u32();
+    socket.write_u32(expected_recv_nonce).await?;
 
     // the client sends its own nonce
-    let mut expected_client_nonce = socket
+    let mut send_nonce = socket
         .read_u32()
         .await
         .context("Client nonce is not 4 bytes")?;
@@ -144,7 +143,7 @@ async fn handle_conn(
         .await
         .context("Identify message length is not 4 bytes")? as usize;
 
-    let mut identify_buf = BytesMut::with_capacity(identify_message_len);
+    let mut identify_buf = vec![0u8; identify_message_len];
     socket
         .read_exact(&mut identify_buf)
         .await
@@ -182,8 +181,7 @@ async fn handle_conn(
         // read calls are done concurrently so that they are not cancelled by select()
         scope.spawn(async {
             loop {
-                match read_signed_message(&mut read, &mut expected_client_nonce, &public_key).await
-                {
+                match read_signed_message(&mut read, &mut expected_recv_nonce, &public_key).await {
                     Ok(message) => {
                         if let Err(err) = sender.send(message).await {
                             log::warn!("Failed to send message to handler: {err:?}");
@@ -215,7 +213,7 @@ async fn handle_conn(
                         write
                             .write_all(&create_signed_message(
                                 &err.into(),
-                                &mut server_nonce,
+                                &mut send_nonce,
                                 server_private_key,
                             )?)
                             .await?;
@@ -240,7 +238,7 @@ async fn handle_conn(
                     write
                         .write_all(&create_signed_message(
                             &request,
-                            &mut server_nonce,
+                            &mut send_nonce,
                             server_private_key,
                         )?)
                         .await?;
