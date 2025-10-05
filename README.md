@@ -8,25 +8,11 @@ Devices types and their corresponding state and update structures are defined in
 
 ## Server Backends
 
-### TCP
+This server implements all of the following client protocols from the specifications described in [devicectrl-common](https://github.com/MatthewCash/devicectrl-common).
 
-Uses mtls to provide authentication and confidentiality meaning that the client must also present a certificate trusted by the server.
-
-The TCP server and clients must serialize messages with JSON, delineating messages with a newline (`\n`). The enums defining messages are defined in [devicectrl-common](https://github.com/MatthewCash/devicectrl-common).
-
-### WebSocket
-
-Nearly identical to the TCP server but using websocket semantics, mtls is used to provide authentication and confidentiality.
-
-The websocket server and clients must only send text messages, serialized with JSON. Currently the websocket server also sends and expects to receive the same message enums as the TCP server.
-
-### HTTP
-
-Messages are sent as POST requests to `/` with the message contents serialized with JSON and placed in the body.
-
-Like the other socket-based servers, Mtls is used to provide authentication and confidentiality.
-
-The enums defining messages are defined in [devicectrl-common](https://github.com/MatthewCash/devicectrl-common).
+-   TCP
+-   WebSocket
+-   HTTP
 
 ## Automations
 
@@ -108,6 +94,28 @@ Example:
                 "dependency_id": "light"
             }
         ]
+    },
+    "scenes": {
+        "morning": [
+            {
+                "device_id": "lamp",
+                "update": { "Brightness": { "brightness": 100 } }
+            },
+            {
+                "device_id": "lamp2",
+                "update": { "Brightness": { "brightness": 100 } }
+            }
+        ],
+        "night": [
+            {
+                "device_id": "lamp",
+                "update": { "Power": { "power": false } }
+            },
+            {
+                "device_id": "lamp2",
+                "update": { "Power": { "power": false } }
+            }
+        ]
     }
 }
 ```
@@ -116,14 +124,16 @@ Example:
 
 Simply execute:
 
-`CONFIG_PATH=config.toml cargo run`
+`CONFIG_PATH=config.json cargo run`
 
 Or use the provided systemd service:
 
 ```bash
 cargo build --release
+
 sudo install -m 755 ./target/release/devicectrl-server /usr/local/bin/
 sudo install -m 644 devicectrl-server.service /etc/systemd/system/
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now devicectrl-server
 ```
