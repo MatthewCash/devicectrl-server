@@ -13,9 +13,16 @@ use tokio::time::sleep;
 use crate::{AppState, devices::dispatch::process_update_request};
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct SunsetDeviceConfig {
+    device_id: DeviceId,
+    color_temp_range: (u8, u8),
+    total_duration_secs: u64,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct SunsetLightTempAutomationConfig {
     coords: (f64, f64),
-    device_ids: Vec<DeviceId>,
+    devices: Vec<SunsetDeviceConfig>,
 }
 
 pub async fn start_automation(
@@ -52,16 +59,25 @@ pub async fn start_automation(
         log::debug!("waiting {wait_time:?} until sunset");
         sleep(wait_time).await;
 
-        // process takes a bit less than 22 mins
-        for light_color_temp in 0..255 {
-            let updates = config.device_ids.iter().map(|id| UpdateRequest {
-                device_id: *id,
-                update: AttributeUpdate::ColorTemp(ColorTempUpdate { light_color_temp }),
-            });
+        try_join_all(config.devices.iter().map(|update| async {
+            for color_temp in update.color_temp_range.0..=update.color_temp_range.1 {
+                let request = UpdateRequest {
+                    device_id: update.device_id,
+                    update: AttributeUpdate::ColorTemp(ColorTempUpdate {
+                        light_color_temp: color_temp,
+                    }),
+                };
+                process_update_request(request, app_state).await?;
 
-            try_join_all(updates.map(|update| process_update_request(update, app_state))).await?;
+                sleep(Duration::from_secs(
+                    update.total_duration_secs
+                        / (update.color_temp_range.1 - update.color_temp_range.0) as u64,
+                ))
+                .await;
+            }
 
-            sleep(Duration::from_secs(5)).await;
-        }
+            Result::<()>::Ok(())
+        }))
+        .await?;
     }
 }
