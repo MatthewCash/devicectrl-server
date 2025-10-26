@@ -70,7 +70,6 @@ macro_rules! make_controllers {
                 $(
                     self.$field.as_ref().map(|c| {
                         let controller = c.clone();
-                        let app_state = app_state.clone();
                         tokio::spawn(async move {
                             if let Err(err) = controller.start_listening(devices, app_state).await {
                                 log::error!("{} controller listener failed: {:?}", stringify!($field), err);
