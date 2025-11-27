@@ -100,22 +100,28 @@ impl GoveeController {
                 let mut buf = [0u8; 1500];
                 let (size, addr) = self.socket.recv_from(&mut buf).await?;
 
-                let devices = devices.read().await;
-                let Some(device) = devices.values().find(|device| matches!(&device.controller, ControllerConfig::Govee(config) if config.address == addr.ip())) else {
-                    log::warn!("received state for unknown device [{}]", addr.ip());
-                    return Ok(());
+
+                let notification = {
+                    let devices = devices.read().await;
+
+                    let Some(device) = devices.values().find(|device| matches!(&device.controller, ControllerConfig::Govee(config) if config.address == addr.ip())) else {
+                        log::warn!("received state for unknown device [{}]", addr.ip());
+                        return Ok(());
+                    };
+
+                    let state = parse_query_payload(
+                        &serde_json::from_slice(&buf[..size])?,
+                        &device.device_type,
+                    )?;
+
+                    UpdateNotification {
+                        device_id: device.id,
+                        reachable: true,
+                        new_state: state,
+                    }
                 };
 
-                let state = parse_query_payload(
-                    &serde_json::from_slice(&buf[..size])?,
-                    &device.device_type,
-                )?;
-
-                process_update_notification(UpdateNotification {
-                    device_id: device.id,
-                    reachable: true,
-                    new_state: state,
-                }, app_state).context("failed to process govee update notification")?;
+                process_update_notification(notification, app_state).await.context("failed to process govee update notification")?;
 
                 Result::<()>::Ok(())
             }

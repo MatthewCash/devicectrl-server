@@ -21,7 +21,20 @@ pub async fn process_update_request(request: UpdateRequest, app_state: &AppState
     Controllers::dispatch_update(app_state, device, &request).await
 }
 
-pub fn process_update_notification(update: UpdateNotification, app_state: &AppState) -> Result<()> {
+pub async fn process_update_notification(
+    update: UpdateNotification,
+    app_state: &AppState,
+) -> Result<()> {
+    {
+        let mut devices = app_state.devices.write().await;
+
+        let device = devices
+            .get_mut(&update.device_id)
+            .context("Could not find device id!")?;
+
+        device.state = update.new_state;
+    }
+
     app_state
         .hooks
         .sender

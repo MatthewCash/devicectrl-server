@@ -180,15 +180,17 @@ async fn handle_message(
     devices: &Devices,
     app_state: &AppState,
 ) -> Result<()> {
-    let devices = devices.read().await;
+    {
+        let devices = devices.read().await;
 
-    let ControllerConfig::Krypton(ref _config) = devices
-        .get(device_id)
-        .context("Message received from unknown device")?
-        .controller
-    else {
-        bail!("Device is not a krypton device");
-    };
+        let ControllerConfig::Krypton(ref _config) = devices
+            .get(device_id)
+            .context("Message received from unknown device")?
+            .controller
+        else {
+            bail!("Device is not a krypton device");
+        };
+    }
 
     let message: ServerBoundKryptonMessage = serde_json::from_slice(buf)?;
 
@@ -206,6 +208,7 @@ async fn handle_message(
             }
 
             process_update_notification(notification, app_state)
+                .await
                 .context("failed to process krypton update notification")?;
         }
         _ => log::warn!("Device sent unknown message"),

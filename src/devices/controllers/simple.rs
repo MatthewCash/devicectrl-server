@@ -268,6 +268,7 @@ async fn handle_message(
             }
 
             process_update_notification(*notification, app_state)
+                .await
                 .context("failed to process simple update notification")?;
         }
         _ => log::warn!("Device sent unknown message"),
