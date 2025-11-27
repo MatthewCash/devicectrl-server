@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail};
 use devicectrl_common::{
-    DeviceState, DeviceType, UpdateNotification, UpdateRequest, device_types::switch::SwitchState,
+    DeviceState, DeviceType, UpdateNotification, UpdateRequest,
+    device_types::switch::{SwitchPower, SwitchState},
     updates::AttributeUpdate,
 };
 use serde_derive::Deserialize;
@@ -52,12 +53,15 @@ pub struct TplinkControllerGlobalConfig {
     response_timeout: Duration,
 }
 
-fn build_update_payload(state: &AttributeUpdate) -> Result<Value> {
-    Ok(match state {
-        AttributeUpdate::Power(update) => json!({
+fn build_update_payload(update: &AttributeUpdate) -> Result<Value> {
+    Ok(match update {
+        AttributeUpdate::Power(power) => json!({
                 "system": {
                     "set_relay_state": {
-                        "state": if update.power { 1 } else { 0 }
+                        "state": match power {
+                            SwitchPower::On => 1,
+                            SwitchPower::Off => 0,
+                        }
                     }
                 }
 
@@ -77,10 +81,13 @@ fn build_query_payload() -> Value {
 fn parse_query_payload(payload: &Value, device_type: &DeviceType) -> Result<DeviceState> {
     Ok(match device_type {
         DeviceType::Switch => DeviceState::Switch(SwitchState {
-            power: payload["system"]["get_sysinfo"]["relay_state"]
+            power: match payload["system"]["get_sysinfo"]["relay_state"]
                 .as_i64()
                 .context("tplink device query payload missing relay state")?
-                == 1,
+            {
+                1 => SwitchPower::On,
+                _ => SwitchPower::Off,
+            },
         }),
         _ => bail!("Unsupported state for tplink controller!"),
     })

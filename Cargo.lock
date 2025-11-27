@@ -329,10 +329,11 @@ dependencies = [
 [[package]]
 name = "devicectrl-common"
 version = "0.1.0"
-source = "git+https://github.com/MatthewCash/devicectrl-common.git#56fcf5f454cb92c249b7e8d90c97487cc76d3cee"
+source = "git+https://github.com/MatthewCash/devicectrl-common.git#782819c94577708ecc5c654365e8f19588a50fde"
 dependencies = [
  "anyhow",
  "arrayvec",
+ "num-traits",
  "paste",
  "serde",
  "serde_derive",

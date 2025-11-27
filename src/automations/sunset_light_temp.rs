@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{Days, Local, Utc};
 use devicectrl_common::{
     DeviceId, UpdateRequest,
-    updates::{AttributeUpdate, ColorTempUpdate},
+    updates::{AttributeUpdate, NumericUpdate},
 };
 use futures::future::try_join_all;
 use serde_derive::Deserialize;
@@ -15,7 +15,7 @@ use crate::{AppState, devices::dispatch::process_update_request};
 #[derive(Clone, Debug, Deserialize)]
 pub struct SunsetDeviceConfig {
     device_id: DeviceId,
-    color_temp_range: (u8, u8),
+    color_temp_range: (u32, u32),
     total_duration_secs: u64,
 }
 
@@ -63,10 +63,9 @@ pub async fn start_automation(
             for color_temp in update.color_temp_range.0..=update.color_temp_range.1 {
                 let request = UpdateRequest {
                     device_id: update.device_id,
-                    update: AttributeUpdate::ColorTemp(ColorTempUpdate {
-                        light_color_temp: color_temp,
-                    }),
+                    update: AttributeUpdate::ColorTemp(NumericUpdate::Absolute(color_temp)),
                 };
+
                 process_update_request(request, app_state).await?;
 
                 sleep(Duration::from_secs(

@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use devicectrl_common::{
     DeviceId, DeviceState, UpdateRequest,
-    device_types::switch::SwitchState,
-    updates::{AttributeUpdate, PowerUpdate},
+    device_types::switch::{SwitchPower, SwitchState},
+    updates::AttributeUpdate,
 };
 use serde_derive::Deserialize;
 
@@ -30,10 +30,7 @@ pub async fn start_automation(
             Hook::DeviceUpdateDispatch(request) => {
                 if let Some(dependency) =
                     config.iter().find(|d| d.dependent_id == request.device_id)
-                    && matches!(
-                        request.update,
-                        AttributeUpdate::Power(PowerUpdate { power: true })
-                    )
+                    && matches!(request.update, AttributeUpdate::Power(SwitchPower::On))
                 {
                     log::debug!(
                         "updating {} as dependent of {}",
@@ -44,7 +41,7 @@ pub async fn start_automation(
                     process_update_request(
                         UpdateRequest {
                             device_id: dependency.dependency_id,
-                            update: AttributeUpdate::Power(PowerUpdate { power: true }),
+                            update: AttributeUpdate::Power(SwitchPower::On),
                         },
                         app_state,
                     )
@@ -52,11 +49,14 @@ pub async fn start_automation(
                     .context("failed to process dependent update request")?;
                 }
             }
+            // we can't detect state updates of individual attributes, so we have to restrict the check to only switch devices
             Hook::DeviceStateUpdate(update) => {
                 if let Some(dependency) = config.iter().find(|d| d.dependent_id == update.device_id)
                     && matches!(
                         update.new_state,
-                        DeviceState::Switch(SwitchState { power: true })
+                        DeviceState::Switch(SwitchState {
+                            power: SwitchPower::On
+                        })
                     )
                 {
                     log::debug!(
@@ -68,7 +68,7 @@ pub async fn start_automation(
                     process_update_request(
                         UpdateRequest {
                             device_id: dependency.dependency_id,
-                            update: AttributeUpdate::Power(PowerUpdate { power: true }),
+                            update: AttributeUpdate::Power(SwitchPower::On),
                         },
                         app_state,
                     )
@@ -79,7 +79,9 @@ pub async fn start_automation(
                 if let Some(dependency) = config.iter().find(|d| d.dependent_id == update.device_id)
                     && matches!(
                         update.new_state,
-                        DeviceState::Switch(SwitchState { power: false })
+                        DeviceState::Switch(SwitchState {
+                            power: SwitchPower::Off
+                        })
                     )
                 {
                     log::debug!(
@@ -91,7 +93,7 @@ pub async fn start_automation(
                     process_update_request(
                         UpdateRequest {
                             device_id: dependency.dependency_id,
-                            update: AttributeUpdate::Power(PowerUpdate { power: false }),
+                            update: AttributeUpdate::Power(SwitchPower::Off),
                         },
                         app_state,
                     )
