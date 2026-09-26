@@ -137,11 +137,15 @@ async fn handle_line(
             .await?;
         }
         ServerBoundSocketMessage::ActivateScene(scene_id) => {
-            log::debug!("tcp got activate scene for {scene_id}");
+            log::debug!("websocket got activate scene for {scene_id}");
 
             process_scene_activate(&scene_id, state).await?;
 
             send(&ClientBoundSocketMessage::RequestReceived).await?;
+        }
+        ServerBoundSocketMessage::QueryCatalog => {
+            log::debug!("websocket got catalog query");
+            send(&super::catalog(state).await).await?;
         }
         _ => {
             send(&ClientBoundSocketMessage::Unimplemented).await?;

@@ -1,4 +1,8 @@
 use anyhow::Result;
+use devicectrl_common::{
+    SceneId,
+    protocol::socket::{ClientBoundSocketMessage, DeviceDescriptor},
+};
 use serde_derive::Deserialize;
 use tokio::task::JoinSet;
 
@@ -12,6 +16,29 @@ use crate::{
 pub mod http;
 pub mod tcp;
 pub mod websocket;
+
+async fn catalog(app_state: &AppState) -> ClientBoundSocketMessage {
+    let devices = app_state
+        .devices
+        .read()
+        .await
+        .values()
+        .map(|device| device.descriptor())
+        .collect::<Vec<_>>();
+    let scenes = app_state.config.scenes.keys().copied().collect::<Vec<_>>();
+
+    catalog_message(devices, scenes)
+}
+
+fn catalog_message(
+    mut devices: Vec<DeviceDescriptor>,
+    mut scenes: Vec<SceneId>,
+) -> ClientBoundSocketMessage {
+    devices.sort_unstable_by_key(|device| device.device_id);
+    scenes.sort_unstable();
+
+    ClientBoundSocketMessage::Catalog { devices, scenes }
+}
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ServersConfig {

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use controllers::ControllerConfig;
 use devicectrl_common::DeviceId;
-use devicectrl_common::{DeviceState, DeviceType};
+use devicectrl_common::{DeviceState, DeviceType, protocol::socket::DeviceDescriptor};
 use std::collections::HashMap;
 
 use serde_derive::Deserialize;
@@ -24,6 +24,15 @@ pub struct Device {
     #[allow(dead_code)]
     state: DeviceState,
     controller: ControllerConfig,
+}
+
+impl Device {
+    pub fn descriptor(&self) -> DeviceDescriptor {
+        DeviceDescriptor {
+            device_id: self.id,
+            device_type: self.device_type,
+        }
+    }
 }
 
 pub type DevicesConfig = HashMap<String, DeviceConfig>;

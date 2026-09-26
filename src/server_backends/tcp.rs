@@ -119,6 +119,10 @@ async fn handle_line(
 
             send(&ClientBoundSocketMessage::RequestReceived).await?;
         }
+        ServerBoundSocketMessage::QueryCatalog => {
+            log::debug!("tcp got catalog query");
+            send(&super::catalog(state).await).await?;
+        }
         _ => {
             send(&ClientBoundSocketMessage::Unimplemented).await?;
         }
